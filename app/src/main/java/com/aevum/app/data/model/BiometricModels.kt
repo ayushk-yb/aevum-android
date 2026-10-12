@@ -2,6 +2,11 @@ package com.aevum.app.data.model
 
 import androidx.compose.ui.graphics.Color
 
+enum class TelemetryDataSource(val label: String, val badgeText: String) {
+    DEMO("Demo Mode", "Sample Data"),
+    LIVE("Health Connect", "Live Sync")
+}
+
 enum class SegmentType(val label: String, val color: Color) {
     SLEEP("Sleep", Color(0xFF9D4EDD)),
     WALK("Walk", Color(0xFFFF6B4A)),

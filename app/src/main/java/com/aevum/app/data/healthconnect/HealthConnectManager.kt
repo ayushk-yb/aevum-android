@@ -20,7 +20,7 @@ import kotlin.math.max
 
 class HealthConnectManager(private val context: Context) {
 
-    private val healthConnectClient by lazy {
+    val healthConnectClient by lazy {
         try {
             if (isAvailable()) HealthConnectClient.getOrCreate(context) else null
         } catch (_: Throwable) {
@@ -78,6 +78,40 @@ class HealthConnectManager(private val context: Context) {
             response.records.sumOf { it.count }
         } catch (_: Throwable) {
             0
+        }
+    }
+
+    suspend fun readTodayActiveCalories(): Long {
+        return try {
+            val client = healthConnectClient ?: return 0
+            val startTime = Instant.now().truncatedTo(ChronoUnit.DAYS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = ActiveCaloriesBurnedRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
+            )
+            response.records.sumOf { it.energy.inKilocalories.toLong() }
+        } catch (_: Throwable) {
+            0
+        }
+    }
+
+    suspend fun readTodayFloors(): Double {
+        return try {
+            val client = healthConnectClient ?: return 0.0
+            val startTime = Instant.now().truncatedTo(ChronoUnit.DAYS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = FloorsClimbedRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
+            )
+            response.records.sumOf { it.floors }
+        } catch (_: Throwable) {
+            0.0
         }
     }
 

@@ -10,6 +10,7 @@ import com.aevum.app.data.model.RecoveryOverview
 import com.aevum.app.data.model.SleepTelemetry
 import com.aevum.app.data.model.StepsTelemetry
 import com.aevum.app.data.model.StreaksTelemetry
+import com.aevum.app.data.model.TelemetryDataSource
 import com.aevum.app.data.repository.DefaultTelemetryRepository
 import com.aevum.app.data.repository.TelemetryRepository
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,6 +34,13 @@ class BiometricViewModel(
     constructor(application: Application, repository: TelemetryRepository) : this(application) {
         this.telemetryRepository = repository
     }
+
+    val dataSource: StateFlow<TelemetryDataSource> = telemetryRepository.getDataSource()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = TelemetryDataSource.DEMO
+        )
 
     val recoveryOverview: StateFlow<RecoveryOverview> = telemetryRepository.getRecoveryOverview()
         .stateIn(
@@ -68,6 +76,30 @@ class BiometricViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = MockTelemetryProvider.getStreaksTelemetry()
         )
+
+    val isHealthConnectAvailable: Boolean
+        get() = healthConnectManager?.isAvailable() == true
+
+    val permissions: Set<String>
+        get() = healthConnectManager?.permissions ?: emptySet()
+
+    fun setDataSource(source: TelemetryDataSource) {
+        telemetryRepository.setDataSource(source)
+        if (source == TelemetryDataSource.LIVE) {
+            refresh()
+        }
+    }
+
+    fun toggleDataSource() {
+        val next = if (dataSource.value == TelemetryDataSource.DEMO) TelemetryDataSource.LIVE else TelemetryDataSource.DEMO
+        setDataSource(next)
+    }
+
+    fun onPermissionsResult(granted: Set<String>) {
+        if (permissions.isNotEmpty() && granted.containsAll(permissions)) {
+            setDataSource(TelemetryDataSource.LIVE)
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {
