@@ -4,6 +4,7 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aevum.app.data.healthconnect.HealthConnectManager
+import com.aevum.app.data.healthconnect.MockTelemetryProvider
 import com.aevum.app.data.model.PulseAgeTelemetry
 import com.aevum.app.data.model.RecoveryOverview
 import com.aevum.app.data.model.SleepTelemetry
@@ -17,51 +18,64 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class BiometricViewModel(
-    application: Application,
-    repository: TelemetryRepository? = null
+    application: Application
 ) : AndroidViewModel(application) {
 
-    val healthConnectManager = HealthConnectManager(application)
-    private val telemetryRepository: TelemetryRepository = repository ?: DefaultTelemetryRepository(healthConnectManager)
+    val healthConnectManager: HealthConnectManager? = try {
+        HealthConnectManager(application)
+    } catch (_: Throwable) {
+        null
+    }
+
+    private var telemetryRepository: TelemetryRepository = DefaultTelemetryRepository(healthConnectManager)
+
+    // Secondary constructor for testing
+    constructor(application: Application, repository: TelemetryRepository) : this(application) {
+        this.telemetryRepository = repository
+    }
 
     val recoveryOverview: StateFlow<RecoveryOverview> = telemetryRepository.getRecoveryOverview()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.aevum.app.data.healthconnect.MockTelemetryProvider.getRecoveryOverview()
+            initialValue = MockTelemetryProvider.getRecoveryOverview()
         )
 
     val stepsTelemetry: StateFlow<StepsTelemetry> = telemetryRepository.getStepsTelemetry()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.aevum.app.data.healthconnect.MockTelemetryProvider.getStepsTelemetry()
+            initialValue = MockTelemetryProvider.getStepsTelemetry()
         )
 
     val sleepTelemetry: StateFlow<SleepTelemetry> = telemetryRepository.getSleepTelemetry()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.aevum.app.data.healthconnect.MockTelemetryProvider.getSleepTelemetry()
+            initialValue = MockTelemetryProvider.getSleepTelemetry()
         )
 
     val pulseAgeTelemetry: StateFlow<PulseAgeTelemetry> = telemetryRepository.getPulseAgeTelemetry()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.aevum.app.data.healthconnect.MockTelemetryProvider.getPulseAgeTelemetry()
+            initialValue = MockTelemetryProvider.getPulseAgeTelemetry()
         )
 
     val streaksTelemetry: StateFlow<StreaksTelemetry> = telemetryRepository.getStreaksTelemetry()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = com.aevum.app.data.healthconnect.MockTelemetryProvider.getStreaksTelemetry()
+            initialValue = MockTelemetryProvider.getStreaksTelemetry()
         )
 
     fun refresh() {
         viewModelScope.launch {
-            telemetryRepository.refreshTelemetry()
+            try {
+                telemetryRepository.refreshTelemetry()
+            } catch (_: Throwable) {
+                // Ignore any telemetry refresh errors
+            }
         }
     }
 }

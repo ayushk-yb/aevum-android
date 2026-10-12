@@ -21,81 +21,115 @@ import kotlin.math.max
 class HealthConnectManager(private val context: Context) {
 
     private val healthConnectClient by lazy {
-        if (isAvailable()) HealthConnectClient.getOrCreate(context) else null
+        try {
+            if (isAvailable()) HealthConnectClient.getOrCreate(context) else null
+        } catch (_: Throwable) {
+            null
+        }
     }
 
-    val permissions = setOf(
-        HealthPermission.getReadPermission(StepsRecord::class),
-        HealthPermission.getReadPermission(HeartRateRecord::class),
-        HealthPermission.getReadPermission(RestingHeartRateRecord::class),
-        HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
-        HealthPermission.getReadPermission(SleepSessionRecord::class),
-        HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
-        HealthPermission.getReadPermission(FloorsClimbedRecord::class)
-    )
+    val permissions: Set<String> by lazy {
+        try {
+            setOf(
+                HealthPermission.getReadPermission(StepsRecord::class),
+                HealthPermission.getReadPermission(HeartRateRecord::class),
+                HealthPermission.getReadPermission(RestingHeartRateRecord::class),
+                HealthPermission.getReadPermission(HeartRateVariabilityRmssdRecord::class),
+                HealthPermission.getReadPermission(SleepSessionRecord::class),
+                HealthPermission.getReadPermission(TotalCaloriesBurnedRecord::class),
+                HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
+                HealthPermission.getReadPermission(FloorsClimbedRecord::class)
+            )
+        } catch (_: Throwable) {
+            emptySet()
+        }
+    }
 
     fun isAvailable(): Boolean {
-        val status = HealthConnectClient.getSdkStatus(context)
-        return status == HealthConnectClient.SDK_AVAILABLE
+        return try {
+            val status = HealthConnectClient.getSdkStatus(context)
+            status == HealthConnectClient.SDK_AVAILABLE
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     suspend fun hasAllPermissions(): Boolean {
-        val client = healthConnectClient ?: return false
-        val granted = client.permissionController.getGrantedPermissions()
-        return granted.containsAll(permissions)
+        return try {
+            val client = healthConnectClient ?: return false
+            val granted = client.permissionController.getGrantedPermissions()
+            permissions.isNotEmpty() && granted.containsAll(permissions)
+        } catch (_: Throwable) {
+            false
+        }
     }
 
     suspend fun readTodaySteps(): Long {
-        val client = healthConnectClient ?: return 0
-        val startTime = Instant.now().truncatedTo(ChronoUnit.DAYS)
-        val endTime = Instant.now()
-        val response = client.readRecords(
-            ReadRecordsRequest(
-                recordType = StepsRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+        return try {
+            val client = healthConnectClient ?: return 0
+            val startTime = Instant.now().truncatedTo(ChronoUnit.DAYS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = StepsRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-        )
-        return response.records.sumOf { it.count }
+            response.records.sumOf { it.count }
+        } catch (_: Throwable) {
+            0
+        }
     }
 
     suspend fun readRestingHeartRate(): Long? {
-        val client = healthConnectClient ?: return null
-        val startTime = Instant.now().minus(24, ChronoUnit.HOURS)
-        val endTime = Instant.now()
-        val response = client.readRecords(
-            ReadRecordsRequest(
-                recordType = RestingHeartRateRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+        return try {
+            val client = healthConnectClient ?: return null
+            val startTime = Instant.now().minus(24, ChronoUnit.HOURS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = RestingHeartRateRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-        )
-        return response.records.lastOrNull()?.beatsPerMinute
+            response.records.lastOrNull()?.beatsPerMinute
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     suspend fun readLatestHrv(): Double? {
-        val client = healthConnectClient ?: return null
-        val startTime = Instant.now().minus(24, ChronoUnit.HOURS)
-        val endTime = Instant.now()
-        val response = client.readRecords(
-            ReadRecordsRequest(
-                recordType = HeartRateVariabilityRmssdRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+        return try {
+            val client = healthConnectClient ?: return null
+            val startTime = Instant.now().minus(24, ChronoUnit.HOURS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = HeartRateVariabilityRmssdRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-        )
-        return response.records.lastOrNull()?.heartRateVariabilityMillis
+            response.records.lastOrNull()?.heartRateVariabilityMillis
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     suspend fun readLastSleepSession(): SleepSessionRecord? {
-        val client = healthConnectClient ?: return null
-        val startTime = Instant.now().minus(36, ChronoUnit.HOURS)
-        val endTime = Instant.now()
-        val response = client.readRecords(
-            ReadRecordsRequest(
-                recordType = SleepSessionRecord::class,
-                timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+        return try {
+            val client = healthConnectClient ?: return null
+            val startTime = Instant.now().minus(36, ChronoUnit.HOURS)
+            val endTime = Instant.now()
+            val response = client.readRecords(
+                ReadRecordsRequest(
+                    recordType = SleepSessionRecord::class,
+                    timeRangeFilter = TimeRangeFilter.between(startTime, endTime)
+                )
             )
-        )
-        return response.records.lastOrNull()
+            response.records.lastOrNull()
+        } catch (_: Throwable) {
+            null
+        }
     }
 
     /**
@@ -104,7 +138,6 @@ class HealthConnectManager(private val context: Context) {
      */
     fun computeDailyStrain(activeKcal: Int, avgBpm: Int): Float {
         if (activeKcal <= 0) return 0.0f
-        // Non-linear strain index matching scientific biometric telemetry
         val rawStrain = (log10(activeKcal.toDouble() + 10.0) * 4.8) + (max(0, avgBpm - 50) * 0.04)
         return (rawStrain.toFloat()).coerceIn(0.0f, 21.0f)
     }
