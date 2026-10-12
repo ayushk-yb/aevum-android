@@ -99,7 +99,17 @@ fun DashboardScreen(
         }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val runtimePermissionLauncher = rememberLauncherForActivityResult(
+        contract = androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permsMap ->
+        val granted = permsMap.filterValues { it }.keys
+        viewModel.onPermissionsResult(granted)
+        if (granted.isNotEmpty()) {
+            showStartupDialog = false
+        }
+    }
+
+    val healthConnectPermissionLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
     ) { grantedPermissions ->
         viewModel.onPermissionsResult(grantedPermissions)
@@ -109,11 +119,18 @@ fun DashboardScreen(
     }
 
     fun triggerConnect() {
+        val perms = viewModel.permissions.ifEmpty { HealthConnectManager.PERMISSIONS }
         try {
-            val perms = viewModel.permissions.ifEmpty { HealthConnectManager.PERMISSIONS }
-            permissionLauncher.launch(perms)
+            // Primary: Standard Health Connect contract
+            healthConnectPermissionLauncher.launch(perms)
         } catch (_: Exception) {
-            openHealthConnectSettings(context)
+            try {
+                // Secondary fallback: Standard Android runtime permissions contract
+                runtimePermissionLauncher.launch(perms.toTypedArray())
+            } catch (_: Exception) {
+                // Tertiary fallback: Directly open Health Connect settings / permissions manager
+                openHealthConnectSettings(context)
+            }
         }
     }
 
@@ -389,6 +406,9 @@ fun DashboardScreen(
             StartupConnectionDialog(
                 onConnectClick = {
                     triggerConnect()
+                },
+                onOpenSettingsClick = {
+                    openHealthConnectSettings(context)
                 },
                 onUseDemoDataClick = {
                     showStartupDialog = false

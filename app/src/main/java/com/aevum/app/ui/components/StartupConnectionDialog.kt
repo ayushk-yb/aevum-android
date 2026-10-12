@@ -50,29 +50,9 @@ import com.aevum.app.ui.theme.TextWhite
 @Composable
 fun StartupConnectionDialog(
     onConnectClick: () -> Unit,
+    onOpenSettingsClick: () -> Unit,
     onUseDemoDataClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
-    fun openHealthConnectSettings(ctx: Context) {
-        val intents = listOf(
-            Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"),
-            Intent("android.health.connect.action.HEALTH_HOME_SETTINGS"),
-            Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS"),
-            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                data = Uri.fromParts("package", ctx.packageName, null)
-            }
-        )
-        for (intent in intents) {
-            try {
-                ctx.startActivity(intent)
-                return
-            } catch (_: Exception) {
-                // Try next fallback intent
-            }
-        }
-    }
-
     Dialog(
         onDismissRequest = onUseDemoDataClick,
         properties = DialogProperties(dismissOnBackPress = true, dismissOnClickOutside = false)
@@ -195,7 +175,7 @@ fun StartupConnectionDialog(
 
                 // Secondary Settings Shortcut
                 OutlinedButton(
-                    onClick = { openHealthConnectSettings(context) },
+                    onClick = onOpenSettingsClick,
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .fillMaxWidth()
