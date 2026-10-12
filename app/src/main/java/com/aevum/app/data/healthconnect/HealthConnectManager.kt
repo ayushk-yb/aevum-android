@@ -20,6 +20,19 @@ import kotlin.math.max
 
 class HealthConnectManager(private val context: Context) {
 
+    companion object {
+        val PERMISSIONS = setOf(
+            "android.permission.health.READ_STEPS",
+            "android.permission.health.READ_HEART_RATE",
+            "android.permission.health.READ_RESTING_HEART_RATE",
+            "android.permission.health.READ_HEART_RATE_VARIABILITY",
+            "android.permission.health.READ_SLEEP",
+            "android.permission.health.READ_TOTAL_CALORIES_BURNED",
+            "android.permission.health.READ_ACTIVE_CALORIES_BURNED",
+            "android.permission.health.READ_FLOORS_CLIMBED"
+        )
+    }
+
     val healthConnectClient by lazy {
         try {
             if (isAvailable()) HealthConnectClient.getOrCreate(context) else null
@@ -30,7 +43,7 @@ class HealthConnectManager(private val context: Context) {
 
     val permissions: Set<String> by lazy {
         try {
-            setOf(
+            val resolved = setOf(
                 HealthPermission.getReadPermission(StepsRecord::class),
                 HealthPermission.getReadPermission(HeartRateRecord::class),
                 HealthPermission.getReadPermission(RestingHeartRateRecord::class),
@@ -40,8 +53,9 @@ class HealthConnectManager(private val context: Context) {
                 HealthPermission.getReadPermission(ActiveCaloriesBurnedRecord::class),
                 HealthPermission.getReadPermission(FloorsClimbedRecord::class)
             )
+            if (resolved.isNotEmpty()) resolved else PERMISSIONS
         } catch (_: Throwable) {
-            emptySet()
+            PERMISSIONS
         }
     }
 
@@ -58,7 +72,8 @@ class HealthConnectManager(private val context: Context) {
         return try {
             val client = healthConnectClient ?: return false
             val granted = client.permissionController.getGrantedPermissions()
-            permissions.isNotEmpty() && granted.containsAll(permissions)
+            val target = permissions.ifEmpty { PERMISSIONS }
+            granted.containsAll(target)
         } catch (_: Throwable) {
             false
         }

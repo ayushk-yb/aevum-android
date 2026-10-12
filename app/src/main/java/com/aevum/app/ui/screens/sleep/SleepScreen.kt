@@ -1,7 +1,6 @@
 package com.aevum.app.ui.screens.sleep
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,15 +23,19 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aevum.app.ui.components.BiometricInfoDialog
 import com.aevum.app.ui.components.GlowBackground
+import com.aevum.app.ui.components.InfoSection
 import com.aevum.app.ui.components.NeedVsGotCard
 import com.aevum.app.ui.components.SleepHypnogramChart
 import com.aevum.app.ui.components.SleepRingHero
@@ -52,6 +55,7 @@ fun SleepScreen(
 ) {
     val sleepTelemetry by viewModel.sleepTelemetry.collectAsState()
     val scrollState = rememberScrollState()
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -113,7 +117,7 @@ fun SleepScreen(
                 }
 
                 IconButton(
-                    onClick = { /* Sleep Architecture Info */ },
+                    onClick = { showInfoDialog = true },
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
@@ -121,7 +125,7 @@ fun SleepScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Info,
-                        contentDescription = "Information",
+                        contentDescription = "Sleep Architecture Info",
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -150,6 +154,34 @@ fun SleepScreen(
             // Need vs Got Split Comparative Card
             NeedVsGotCard(
                 sleepTelemetry = sleepTelemetry
+            )
+        }
+
+        // (i) Info Dialog for Sleep Architecture
+        if (showInfoDialog) {
+            BiometricInfoDialog(
+                title = "Sleep Architecture",
+                subtitle = "Polysomnographic Hypnogram",
+                accentColor = PurpleGlow,
+                sections = listOf(
+                    InfoSection(
+                        "Deep Sleep (Slow-Wave N3)",
+                        "Essential for cellular regeneration, tissue synthesis, human growth hormone release, and immune fortification."
+                    ),
+                    InfoSection(
+                        "REM Sleep (Rapid Eye Movement)",
+                        "Crucial for cognitive restoration, emotional regulation, motor memory consolidation, and neuroplasticity."
+                    ),
+                    InfoSection(
+                        "Light Sleep (N1 & N2)",
+                        "Transitional stages stabilizing circadian rhythms and body temperature regulation."
+                    ),
+                    InfoSection(
+                        "Sleep Need vs Got & Deficit",
+                        "Calculates your individualized baseline requirement (7h 50m) against actual duration to measure cumulative sleep debt."
+                    )
+                ),
+                onDismiss = { showInfoDialog = false }
             )
         }
     }

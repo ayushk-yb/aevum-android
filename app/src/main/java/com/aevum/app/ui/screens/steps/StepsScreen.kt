@@ -25,22 +25,25 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aevum.app.ui.components.BiometricInfoDialog
 import com.aevum.app.ui.components.DaySkylineHistogram
 import com.aevum.app.ui.components.GlassmorphicCard
 import com.aevum.app.ui.components.GlowBackground
+import com.aevum.app.ui.components.InfoSection
 import com.aevum.app.ui.components.SummitElevationChart
 import com.aevum.app.ui.theme.BlueDeep
 import com.aevum.app.ui.theme.BlueSky
 import com.aevum.app.ui.theme.CardBackgroundGlass
-import com.aevum.app.ui.theme.CardBorderSubtle
 import com.aevum.app.ui.theme.DeltaNegative
 import com.aevum.app.ui.theme.MidnightDark
 import com.aevum.app.ui.theme.TextMuted
@@ -56,6 +59,7 @@ fun StepsScreen(
 ) {
     val stepsTelemetry by viewModel.stepsTelemetry.collectAsState()
     val scrollState = rememberScrollState()
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -117,7 +121,7 @@ fun StepsScreen(
                 }
 
                 IconButton(
-                    onClick = { /* Info modal */ },
+                    onClick = { showInfoDialog = true },
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
@@ -125,7 +129,7 @@ fun StepsScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Info,
-                        contentDescription = "Information",
+                        contentDescription = "Summit Climb Information",
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -286,6 +290,34 @@ fun StepsScreen(
             // Day Skyline Section
             DaySkylineHistogram(
                 hourlyData = stepsTelemetry.hourlyHistogram
+            )
+        }
+
+        // (i) Info Dialog for Steps & Summit
+        if (showInfoDialog) {
+            BiometricInfoDialog(
+                title = "Summit Climb",
+                subtitle = "Elevation & Movement Dynamics",
+                accentColor = BlueSky,
+                sections = listOf(
+                    InfoSection(
+                        "Summit Elevation Arc (10,000 Steps)",
+                        "Aevum visualizes your daily movement as a mountain ascent. The apex flag (10,000 steps) represents standard metabolic summit completion."
+                    ),
+                    InfoSection(
+                        "Active Position vs. Usual",
+                        "The luminous node traces your position in real time. The dashed line maps your historical baseline trajectory by this exact hour."
+                    ),
+                    InfoSection(
+                        "Floors Climbed",
+                        "Elevational barometric gain translated into 3-meter flights of stairs, tracking vertical leg drive and cardiovascular load."
+                    ),
+                    InfoSection(
+                        "Hourly Skyline Histogram",
+                        "Chronological 24-hour step density. Peak movement windows illuminate in neon cyan, highlighting your diurnal cadence."
+                    )
+                ),
+                onDismiss = { showInfoDialog = false }
             )
         }
     }

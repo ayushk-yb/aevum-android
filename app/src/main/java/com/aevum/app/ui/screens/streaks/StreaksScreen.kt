@@ -1,7 +1,6 @@
 package com.aevum.app.ui.screens.streaks
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,24 +25,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aevum.app.ui.components.ActivityHeatmapMatrix
 import com.aevum.app.ui.components.BadgesCarousel
+import com.aevum.app.ui.components.BiometricInfoDialog
 import com.aevum.app.ui.components.DailyMilestoneTracker
 import com.aevum.app.ui.components.GlassmorphicCard
 import com.aevum.app.ui.components.GlowBackground
+import com.aevum.app.ui.components.InfoSection
 import com.aevum.app.ui.theme.AmberGlow
 import com.aevum.app.ui.theme.CardBackgroundGlass
 import com.aevum.app.ui.theme.GoldGlow
 import com.aevum.app.ui.theme.MidnightDark
-import com.aevum.app.ui.theme.TextMuted
 import com.aevum.app.ui.theme.TextSecondary
 import com.aevum.app.ui.theme.TextWhite
 import com.aevum.app.viewmodels.BiometricViewModel
@@ -56,6 +58,7 @@ fun StreaksScreen(
 ) {
     val streaksTelemetry by viewModel.streaksTelemetry.collectAsState()
     val scrollState = rememberScrollState()
+    var showInfoDialog by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier
@@ -117,7 +120,7 @@ fun StreaksScreen(
                 }
 
                 IconButton(
-                    onClick = { /* Streak criteria info */ },
+                    onClick = { showInfoDialog = true },
                     modifier = Modifier
                         .size(36.dp)
                         .clip(CircleShape)
@@ -125,7 +128,7 @@ fun StreaksScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Rounded.Info,
-                        contentDescription = "Information",
+                        contentDescription = "Streak Rules Info",
                         tint = TextSecondary,
                         modifier = Modifier.size(18.dp)
                     )
@@ -283,6 +286,34 @@ fun StreaksScreen(
             // Badges Carousel
             BadgesCarousel(
                 badges = streaksTelemetry.badges
+            )
+        }
+
+        // (i) Info Dialog for Streaks & Badges
+        if (showInfoDialog) {
+            BiometricInfoDialog(
+                title = "Streak & Badges",
+                subtitle = "Consistency Engine",
+                accentColor = GoldGlow,
+                sections = listOf(
+                    InfoSection(
+                        "Current Streak (12 Days)",
+                        "Increments daily whenever sleep or continuous cardiovascular telemetry is successfully recorded. Missing consecutive days resets the active streak counter."
+                    ),
+                    InfoSection(
+                        "10-Day Milestone Tracker",
+                        "Highlights your rolling 10-day consistency window. Solid golden checkmarks indicate verified days with complete recovery and strain logging."
+                    ),
+                    InfoSection(
+                        "4-Month Telemetry Matrix",
+                        "A GitHub-style contribution heatmap reflecting multi-month consistency. Amber intensity denotes relative volume of logged cardiovascular and movement data."
+                    ),
+                    InfoSection(
+                        "Biometric Badges",
+                        "Milestone achievement emblems unlocked as you hit physiological targets: Recovery Master, Summit 10K, Sleep Architect, and Longevity Prime."
+                    )
+                ),
+                onDismiss = { showInfoDialog = false }
             )
         }
     }

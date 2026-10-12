@@ -1,13 +1,10 @@
 package com.aevum.app.ui.screens.dashboard
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,17 +23,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Bolt
-import androidx.compose.material.icons.rounded.CheckCircle
-import androidx.compose.material.icons.rounded.Download
+import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.LocalFireDepartment
-import androidx.compose.material.icons.rounded.Sensors
-import androidx.compose.material.icons.rounded.Sync
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -47,7 +38,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -55,21 +45,23 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.aevum.app.data.healthconnect.HealthConnectManager
 import com.aevum.app.data.model.TelemetryDataSource
 import com.aevum.app.navigation.Screen
+import com.aevum.app.ui.components.BiometricInfoDialog
 import com.aevum.app.ui.components.DayTimelineBar
 import com.aevum.app.ui.components.GlassmorphicCard
 import com.aevum.app.ui.components.GlowBackground
+import com.aevum.app.ui.components.InfoSection
 import com.aevum.app.ui.components.SparklineCard
+import com.aevum.app.ui.components.StartupConnectionDialog
 import com.aevum.app.ui.components.TripleRingGauge
 import com.aevum.app.ui.theme.AmberGlow
 import com.aevum.app.ui.theme.CardBackgroundGlass
 import com.aevum.app.ui.theme.CardBorderSubtle
 import com.aevum.app.ui.theme.CyanGlow
 import com.aevum.app.ui.theme.EmeraldGlow
-import com.aevum.app.ui.theme.GoldGlow
 import com.aevum.app.ui.theme.MidnightDark
-import com.aevum.app.ui.theme.TextMuted
 import com.aevum.app.ui.theme.TextSecondary
 import com.aevum.app.ui.theme.TextWhite
 import com.aevum.app.viewmodels.BiometricViewModel
@@ -87,12 +79,42 @@ fun DashboardScreen(
     val dataSource by viewModel.dataSource.collectAsState()
     val scrollState = rememberScrollState()
 
-    var showNotAvailableDialog by remember { mutableStateOf(false) }
+    var showStartupDialog by remember { mutableStateOf(dataSource != TelemetryDataSource.LIVE) }
+    var showInfoDialog by remember { mutableStateOf(false) }
+
+    fun openHealthConnectSettings(ctx: Context) {
+        val intents = listOf(
+            Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS"),
+            Intent("android.health.connect.action.HEALTH_HOME_SETTINGS"),
+            Intent("android.health.connect.action.MANAGE_HEALTH_PERMISSIONS"),
+            Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", ctx.packageName, null)
+            }
+        )
+        for (intent in intents) {
+            try {
+                ctx.startActivity(intent)
+                return
+            } catch (_: Exception) {}
+        }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
     ) { grantedPermissions ->
         viewModel.onPermissionsResult(grantedPermissions)
+        if (grantedPermissions.isNotEmpty()) {
+            showStartupDialog = false
+        }
+    }
+
+    fun triggerConnect() {
+        try {
+            val perms = viewModel.permissions.ifEmpty { HealthConnectManager.PERMISSIONS }
+            permissionLauncher.launch(perms)
+        } catch (_: Exception) {
+            openHealthConnectSettings(context)
+        }
     }
 
     Box(
@@ -113,7 +135,7 @@ fun DashboardScreen(
                 .padding(horizontal = 20.dp)
                 .padding(top = 16.dp, bottom = 32.dp)
         ) {
-            // Top Header: Date Banner & Streak Flame Badge
+            // Top Header: Date Banner, Streak Flame Badge & Info Button
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -136,29 +158,50 @@ fun DashboardScreen(
                     )
                 }
 
-                // Flame streak badge (12)
-                Box(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(CardBackgroundGlass)
-                        .clickable { onNavigateToScreen(Screen.Streaks) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    // Flame streak badge (12)
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(CardBackgroundGlass)
+                            .clickable { onNavigateToScreen(Screen.Streaks) }
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.LocalFireDepartment,
+                                contentDescription = "Streak",
+                                tint = AmberGlow,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "12",
+                                color = TextWhite,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // (i) Info trigger button
+                    IconButton(
+                        onClick = { showInfoDialog = true },
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(CircleShape)
+                            .background(CardBackgroundGlass)
                     ) {
                         Icon(
-                            imageVector = Icons.Rounded.LocalFireDepartment,
-                            contentDescription = "Streak",
-                            tint = AmberGlow,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "12",
-                            color = TextWhite,
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                            imageVector = Icons.Rounded.Info,
+                            contentDescription = "Day Overview Info",
+                            tint = TextSecondary,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -174,22 +217,9 @@ fun DashboardScreen(
                 borderColor = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow.copy(alpha = 0.35f) else CardBorderSubtle,
                 onClick = {
                     if (dataSource == TelemetryDataSource.LIVE) {
-                        // Toggle back to Demo preview
                         viewModel.setDataSource(TelemetryDataSource.DEMO)
                     } else {
-                        // Connect to Health Connect
-                        if (viewModel.isHealthConnectAvailable) {
-                            scope.launch {
-                                val hasAll = viewModel.healthConnectManager?.hasAllPermissions() == true
-                                if (hasAll) {
-                                    viewModel.setDataSource(TelemetryDataSource.LIVE)
-                                } else {
-                                    permissionLauncher.launch(viewModel.permissions)
-                                }
-                            }
-                        } else {
-                            showNotAvailableDialog = true
-                        }
+                        triggerConnect()
                     }
                 }
             ) {
@@ -354,53 +384,47 @@ fun DashboardScreen(
             }
         }
 
-        // Dialog when Health Connect app is not installed
-        if (showNotAvailableDialog) {
-            AlertDialog(
-                onDismissRequest = { showNotAvailableDialog = false },
-                containerColor = Color(0xFF181822),
-                title = {
-                    Text(
-                        text = "Google Health Connect",
-                        color = TextWhite,
-                        fontWeight = FontWeight.Bold
-                    )
+        // Startup Health Connect Connection Dialog
+        if (showStartupDialog && dataSource != TelemetryDataSource.LIVE) {
+            StartupConnectionDialog(
+                onConnectClick = {
+                    triggerConnect()
                 },
-                text = {
-                    Text(
-                        text = "Health Connect is not currently active on this device. Install or enable Google Health Connect to sync live continuous telemetry, or continue exploring with Aevum Demo Telemetry.",
-                        color = TextSecondary,
-                        fontSize = 14.sp
-                    )
-                },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            showNotAvailableDialog = false
-                            try {
-                                val intent = Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("market://details?id=com.google.android.apps.healthdata")
-                                )
-                                context.startActivity(intent)
-                            } catch (_: Exception) {
-                                val intent = Intent(
-                                    Intent.ACTION_VIEW,
-                                    Uri.parse("https://play.google.com/store/apps/details?id=com.google.android.apps.healthdata")
-                                )
-                                context.startActivity(intent)
-                            }
-                        },
-                        colors = ButtonDefaults.buttonColors(containerColor = CyanGlow)
-                    ) {
-                        Text("Get Health Connect", color = Color.Black, fontWeight = FontWeight.Bold)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showNotAvailableDialog = false }) {
-                        Text("Keep Demo Mode", color = TextSecondary)
-                    }
+                onUseDemoDataClick = {
+                    showStartupDialog = false
                 }
+            )
+        }
+
+        // (i) Info Dialog for Day Overview
+        if (showInfoDialog) {
+            BiometricInfoDialog(
+                title = "Day Overview",
+                subtitle = "Biometric Telemetry Engine",
+                accentColor = EmeraldGlow,
+                sections = listOf(
+                    InfoSection(
+                        "Recovery Score (72%)",
+                        "A composite index (0–100%) reflecting autonomic recovery, sleep debt repayment, and resting cardiovascular strain. Green (>66%) signifies your body is primed for cardiovascular adaptation."
+                    ),
+                    InfoSection(
+                        "Sleep Performance (88%)",
+                        "Quantifies total restorative sleep against your biological sleep requirement. Combines slow-wave deep sleep and REM consistency."
+                    ),
+                    InfoSection(
+                        "Daily Strain (6.4)",
+                        "A logarithmic exertion metric (0–21) measuring total cardiovascular load across heart rate zones, active energy burned, and training intensity."
+                    ),
+                    InfoSection(
+                        "Heart Rate Variability (HRV 54 ms)",
+                        "RMSSD measurement of intervals between heartbeats. Higher HRV signals optimal parasympathetic tone and physiological resilience."
+                    ),
+                    InfoSection(
+                        "Resting Heart Rate (57 bpm)",
+                        "Basal cardiovascular efficiency recorded during sleep. Downward trends indicate strengthening aerobic conditioning."
+                    )
+                ),
+                onDismiss = { showInfoDialog = false }
             )
         }
     }

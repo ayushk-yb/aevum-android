@@ -1,9 +1,9 @@
 package com.aevum.app.data.repository
 
+import android.content.Context
 import com.aevum.app.data.healthconnect.HealthConnectManager
 import com.aevum.app.data.healthconnect.MockTelemetryProvider
 import com.aevum.app.data.model.ElevationPoint
-import com.aevum.app.data.model.HourlySteps
 import com.aevum.app.data.model.PulseAgeTelemetry
 import com.aevum.app.data.model.RecoveryOverview
 import com.aevum.app.data.model.SleepTelemetry
@@ -23,19 +23,30 @@ interface TelemetryRepository {
     fun getStreaksTelemetry(): Flow<StreaksTelemetry>
     fun getDataSource(): Flow<TelemetryDataSource>
     fun setDataSource(source: TelemetryDataSource)
+    fun updateCalendarAge(newAge: Int)
     suspend fun refreshTelemetry()
 }
 
 class DefaultTelemetryRepository(
-    private val healthConnectManager: HealthConnectManager? = null
+    private val healthConnectManager: HealthConnectManager? = null,
+    context: Context? = null
 ) : TelemetryRepository {
 
+    private val sharedPrefs = context?.getSharedPreferences("aevum_settings", Context.MODE_PRIVATE)
+
     private val dataSourceState = MutableStateFlow(TelemetryDataSource.DEMO)
+
+    private val savedAge = sharedPrefs?.getInt("calendar_age", 34) ?: 34
 
     private val recoveryState = MutableStateFlow(MockTelemetryProvider.getRecoveryOverview())
     private val stepsState = MutableStateFlow(MockTelemetryProvider.getStepsTelemetry())
     private val sleepState = MutableStateFlow(MockTelemetryProvider.getSleepTelemetry())
-    private val pulseAgeState = MutableStateFlow(MockTelemetryProvider.getPulseAgeTelemetry())
+    private val pulseAgeState = MutableStateFlow(
+        MockTelemetryProvider.getPulseAgeTelemetry().let {
+            val delta = Math.round((it.pulseAge - savedAge) * 10f) / 10f
+            it.copy(calendarAge = savedAge, deltaYears = delta)
+        }
+    )
     private val streaksState = MutableStateFlow(MockTelemetryProvider.getStreaksTelemetry())
 
     override fun getRecoveryOverview(): Flow<RecoveryOverview> = recoveryState.asStateFlow()
@@ -45,14 +56,26 @@ class DefaultTelemetryRepository(
     override fun getStreaksTelemetry(): Flow<StreaksTelemetry> = streaksState.asStateFlow()
     override fun getDataSource(): Flow<TelemetryDataSource> = dataSourceState.asStateFlow()
 
+    override fun updateCalendarAge(newAge: Int) {
+        sharedPrefs?.edit()?.putInt("calendar_age", newAge)?.apply()
+        val current = pulseAgeState.value
+        val delta = Math.round((current.pulseAge - newAge) * 10f) / 10f
+        pulseAgeState.value = current.copy(
+            calendarAge = newAge,
+            deltaYears = delta
+        )
+    }
+
     override fun setDataSource(source: TelemetryDataSource) {
         dataSourceState.value = source
         if (source == TelemetryDataSource.DEMO) {
-            // Restore demo data
             recoveryState.value = MockTelemetryProvider.getRecoveryOverview()
             stepsState.value = MockTelemetryProvider.getStepsTelemetry()
             sleepState.value = MockTelemetryProvider.getSleepTelemetry()
-            pulseAgeState.value = MockTelemetryProvider.getPulseAgeTelemetry()
+            pulseAgeState.value = MockTelemetryProvider.getPulseAgeTelemetry().let {
+                val delta = Math.round((it.pulseAge - pulseAgeState.value.calendarAge) * 10f) / 10f
+                it.copy(calendarAge = pulseAgeState.value.calendarAge, deltaYears = delta)
+            }
             streaksState.value = MockTelemetryProvider.getStreaksTelemetry()
         }
     }
@@ -60,7 +83,7 @@ class DefaultTelemetryRepository(
     override suspend fun refreshTelemetry() {
         if (dataSourceState.value == TelemetryDataSource.DEMO) return
 
-        if (healthConnectManager != null && healthConnectManager.isAvailable() && healthConnectManager.hasAllPermissions()) {
+        if (healthConnectManager != null) {
             val liveSteps = healthConnectManager.readTodaySteps()
             val liveRhr = healthConnectManager.readRestingHeartRate()
             val liveHrv = healthConnectManager.readLatestHrv()
@@ -71,7 +94,7 @@ class DefaultTelemetryRepository(
             // Update Steps telemetry with live numbers
             val targetSteps = 10000
             val currentSteps = liveSteps.toInt()
-            val km = (currentSteps * 0.00075f) // approx 0.75m per step
+            val km = (currentSteps * 0.00075f)
             val progressPercent = ((currentSteps.toFloat() / targetSteps) * 100).toInt().coerceIn(0, 100)
             val deviationVsUsual = currentSteps - 8100
             val toSummit = (targetSteps - currentSteps).coerceAtLeast(0)
@@ -92,13 +115,11 @@ class DefaultTelemetryRepository(
                 )
             )
 
-            // Calculate live strain
             val computedStrain = healthConnectManager.computeDailyStrain(
                 activeKcal = if (liveActiveKcal > 0) liveActiveKcal.toInt() else 212,
                 avgBpm = (liveRhr ?: 60).toInt()
             )
 
-            // Update Recovery & Vitals
             var updatedRecovery = recoveryState.value.copy(
                 strainScore = computedStrain
             )
@@ -119,7 +140,6 @@ class DefaultTelemetryRepository(
                 )
             }
 
-            // Update Sleep if available
             if (liveSleep != null) {
                 val duration = Duration.between(liveSleep.startTime, liveSleep.endTime)
                 val hours = duration.toHours()

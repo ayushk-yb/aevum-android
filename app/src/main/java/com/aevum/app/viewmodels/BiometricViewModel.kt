@@ -28,7 +28,7 @@ class BiometricViewModel(
         null
     }
 
-    private var telemetryRepository: TelemetryRepository = DefaultTelemetryRepository(healthConnectManager)
+    private var telemetryRepository: TelemetryRepository = DefaultTelemetryRepository(healthConnectManager, application)
 
     // Secondary constructor for testing
     constructor(application: Application, repository: TelemetryRepository) : this(application) {
@@ -81,7 +81,7 @@ class BiometricViewModel(
         get() = healthConnectManager?.isAvailable() == true
 
     val permissions: Set<String>
-        get() = healthConnectManager?.permissions ?: emptySet()
+        get() = healthConnectManager?.permissions ?: HealthConnectManager.PERMISSIONS
 
     fun setDataSource(source: TelemetryDataSource) {
         telemetryRepository.setDataSource(source)
@@ -95,8 +95,12 @@ class BiometricViewModel(
         setDataSource(next)
     }
 
+    fun updateCalendarAge(newAge: Int) {
+        telemetryRepository.updateCalendarAge(newAge)
+    }
+
     fun onPermissionsResult(granted: Set<String>) {
-        if (permissions.isNotEmpty() && granted.containsAll(permissions)) {
+        if (granted.isNotEmpty()) {
             setDataSource(TelemetryDataSource.LIVE)
         }
     }
