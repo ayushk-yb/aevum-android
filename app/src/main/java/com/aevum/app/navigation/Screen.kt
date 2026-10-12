@@ -44,6 +44,7 @@ sealed class Screen(
     )
 
     companion object {
-        val items = listOf(Dashboard, Steps, Sleep, PulseAge, Streaks)
+        val items: List<Screen>
+            get() = listOf(Dashboard, Steps, Sleep, PulseAge, Streaks)
     }
 }

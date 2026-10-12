@@ -56,4 +56,16 @@ class TelemetryTest {
         assertEquals(10, streaks.recentDayMilestones.size)
         assertTrue(streaks.badges.isNotEmpty())
     }
+
+    @Test
+    fun testNavigationScreenItems() {
+        val items = com.aevum.app.navigation.Screen.items
+        assertEquals(5, items.size)
+        items.forEach { screen ->
+            assertNotNull(screen)
+            assertNotNull(screen.route)
+            assertNotNull(screen.title)
+            assertNotNull(screen.icon)
+        }
+    }
 }
