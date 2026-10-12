@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Aevum</string>
+    <string name="health_connect_rationale">Aevum requires Health Connect permissions to read your continuous heart rate, sleep stages, steps, and activity metrics to compute your recovery and longevity biometrics.</string>
+</resources>
