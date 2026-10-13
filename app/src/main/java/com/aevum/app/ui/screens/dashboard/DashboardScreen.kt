@@ -76,11 +76,26 @@ fun DashboardScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val recoveryOverview by viewModel.recoveryOverview.collectAsState()
+    val streaksTelemetry by viewModel.streaksTelemetry.collectAsState()
     val dataSource by viewModel.dataSource.collectAsState()
     val scrollState = rememberScrollState()
+    val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
     var showStartupDialog by remember { mutableStateOf(dataSource != TelemetryDataSource.LIVE) }
     var showInfoDialog by remember { mutableStateOf(false) }
+
+    // Auto-check permissions and refresh live data whenever returning from Health Connect Settings
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.checkPermissionsAndSync()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
 
     fun openHealthConnectSettings(ctx: Context) {
         val intents = listOf(
@@ -179,7 +194,7 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Flame streak badge (12)
+                    // Flame streak badge (live or demo)
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(16.dp))
@@ -198,7 +213,7 @@ fun DashboardScreen(
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
-                                text = "12",
+                                text = "${streaksTelemetry.currentStreakDays}",
                                 color = TextWhite,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold
@@ -234,7 +249,7 @@ fun DashboardScreen(
                 borderColor = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow.copy(alpha = 0.35f) else CardBorderSubtle,
                 onClick = {
                     if (dataSource == TelemetryDataSource.LIVE) {
-                        viewModel.setDataSource(TelemetryDataSource.DEMO)
+                        viewModel.refresh()
                     } else {
                         triggerConnect()
                     }
@@ -249,7 +264,8 @@ fun DashboardScreen(
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
                         Box(
                             modifier = Modifier
@@ -260,28 +276,50 @@ fun DashboardScreen(
                                 )
                         )
                         Text(
-                            text = if (dataSource == TelemetryDataSource.LIVE) "Health Connect Live Sync" else "Demo Mode • Tap to connect Health Connect",
+                            text = if (dataSource == TelemetryDataSource.LIVE) "Health Connect Live • Tap to refresh" else "Demo Mode • Tap to connect Health Connect",
                             color = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow else TextWhite,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                     }
 
-                    Box(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(
-                                if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow.copy(alpha = 0.2f)
-                                else CyanGlow.copy(alpha = 0.15f)
-                            )
-                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text(
-                            text = if (dataSource == TelemetryDataSource.LIVE) "Connected" else "Connect",
-                            color = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow else CyanGlow,
-                            fontSize = 11.sp,
-                            fontWeight = FontWeight.Bold
-                        )
+                        if (dataSource == TelemetryDataSource.LIVE) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CardBackgroundGlass)
+                                    .clickable { viewModel.setDataSource(TelemetryDataSource.DEMO) }
+                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            ) {
+                                Text(
+                                    text = "Demo",
+                                    color = TextSecondary,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(
+                                    if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow.copy(alpha = 0.2f)
+                                    else CyanGlow.copy(alpha = 0.15f)
+                                )
+                                .padding(horizontal = 8.dp, vertical = 3.dp)
+                        ) {
+                            Text(
+                                text = if (dataSource == TelemetryDataSource.LIVE) "Live Sync" else "Connect",
+                                color = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow else CyanGlow,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

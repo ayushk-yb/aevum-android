@@ -28,7 +28,8 @@ class BiometricViewModel(
         null
     }
 
-    private var telemetryRepository: TelemetryRepository = DefaultTelemetryRepository(healthConnectManager, application)
+    private var telemetryRepository: TelemetryRepository =
+        DefaultTelemetryRepository.getInstance(healthConnectManager, application)
 
     // Secondary constructor for testing
     constructor(application: Application, repository: TelemetryRepository) : this(application) {
@@ -38,42 +39,42 @@ class BiometricViewModel(
     val dataSource: StateFlow<TelemetryDataSource> = telemetryRepository.getDataSource()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = TelemetryDataSource.DEMO
         )
 
     val recoveryOverview: StateFlow<RecoveryOverview> = telemetryRepository.getRecoveryOverview()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = MockTelemetryProvider.getRecoveryOverview()
         )
 
     val stepsTelemetry: StateFlow<StepsTelemetry> = telemetryRepository.getStepsTelemetry()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = MockTelemetryProvider.getStepsTelemetry()
         )
 
     val sleepTelemetry: StateFlow<SleepTelemetry> = telemetryRepository.getSleepTelemetry()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = MockTelemetryProvider.getSleepTelemetry()
         )
 
     val pulseAgeTelemetry: StateFlow<PulseAgeTelemetry> = telemetryRepository.getPulseAgeTelemetry()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = MockTelemetryProvider.getPulseAgeTelemetry()
         )
 
     val streaksTelemetry: StateFlow<StreaksTelemetry> = telemetryRepository.getStreaksTelemetry()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = MockTelemetryProvider.getStreaksTelemetry()
         )
 
@@ -82,6 +83,24 @@ class BiometricViewModel(
 
     val permissions: Set<String>
         get() = healthConnectManager?.permissions ?: HealthConnectManager.PERMISSIONS
+
+    init {
+        checkPermissionsAndSync()
+    }
+
+    fun checkPermissionsAndSync() {
+        viewModelScope.launch {
+            try {
+                if (healthConnectManager?.hasAnyPermission() == true) {
+                    telemetryRepository.setDataSource(TelemetryDataSource.LIVE)
+                    telemetryRepository.refreshTelemetry()
+                } else if (dataSource.value == TelemetryDataSource.LIVE) {
+                    telemetryRepository.refreshTelemetry()
+                }
+            } catch (_: Throwable) {
+            }
+        }
+    }
 
     fun setDataSource(source: TelemetryDataSource) {
         telemetryRepository.setDataSource(source)
@@ -97,11 +116,16 @@ class BiometricViewModel(
 
     fun updateCalendarAge(newAge: Int) {
         telemetryRepository.updateCalendarAge(newAge)
+        if (dataSource.value == TelemetryDataSource.LIVE) {
+            refresh()
+        }
     }
 
     fun onPermissionsResult(granted: Set<String>) {
         if (granted.isNotEmpty()) {
             setDataSource(TelemetryDataSource.LIVE)
+        } else {
+            checkPermissionsAndSync()
         }
     }
 
