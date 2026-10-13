@@ -129,3 +129,16 @@ data class StreaksTelemetry(
     val heatmapCells: List<DayHeatmapCell> = emptyList(),
     val badges: List<BiometricBadge> = emptyList()
 )
+
+enum class DataSourceFilterMode(val label: String) {
+    ALL("All Sources (Merged)"),
+    FITBIT_ONLY("Fitbit Only (Wearable)"),
+    CUSTOM("Custom Source")
+}
+
+data class DiscoveredSource(
+    val packageName: String,
+    val appName: String,
+    val isFitbitOrGoogle: Boolean = false,
+    val recordCount: Int = 0
+)

@@ -5,6 +5,8 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.aevum.app.data.healthconnect.HealthConnectManager
 import com.aevum.app.data.healthconnect.MockTelemetryProvider
+import com.aevum.app.data.model.DataSourceFilterMode
+import com.aevum.app.data.model.DiscoveredSource
 import com.aevum.app.data.model.PulseAgeTelemetry
 import com.aevum.app.data.model.RecoveryOverview
 import com.aevum.app.data.model.SleepTelemetry
@@ -41,6 +43,27 @@ class BiometricViewModel(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = TelemetryDataSource.DEMO
+        )
+
+    val filterMode: StateFlow<DataSourceFilterMode> = telemetryRepository.getFilterMode()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = DataSourceFilterMode.FITBIT_ONLY
+        )
+
+    val selectedSourcePackage: StateFlow<String?> = telemetryRepository.getSelectedSourcePackage()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = null
+        )
+
+    val discoveredSources: StateFlow<List<DiscoveredSource>> = telemetryRepository.getDiscoveredSources()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
         )
 
     val recoveryOverview: StateFlow<RecoveryOverview> = telemetryRepository.getRecoveryOverview()
@@ -105,6 +128,13 @@ class BiometricViewModel(
     fun setDataSource(source: TelemetryDataSource) {
         telemetryRepository.setDataSource(source)
         if (source == TelemetryDataSource.LIVE) {
+            refresh()
+        }
+    }
+
+    fun setFilterMode(mode: DataSourceFilterMode, targetPackage: String? = null) {
+        telemetryRepository.setFilterMode(mode, targetPackage)
+        if (dataSource.value == TelemetryDataSource.LIVE) {
             refresh()
         }
     }

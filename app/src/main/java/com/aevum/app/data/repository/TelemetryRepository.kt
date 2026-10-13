@@ -6,7 +6,9 @@ import androidx.health.connect.client.records.SleepSessionRecord
 import com.aevum.app.data.healthconnect.HealthConnectManager
 import com.aevum.app.data.healthconnect.MockTelemetryProvider
 import com.aevum.app.data.model.BiometricBadge
+import com.aevum.app.data.model.DataSourceFilterMode
 import com.aevum.app.data.model.DayHeatmapCell
+import com.aevum.app.data.model.DiscoveredSource
 import com.aevum.app.data.model.ElevationPoint
 import com.aevum.app.data.model.HourlySteps
 import com.aevum.app.data.model.PulseAgeTelemetry
@@ -38,7 +40,11 @@ interface TelemetryRepository {
     fun getPulseAgeTelemetry(): Flow<PulseAgeTelemetry>
     fun getStreaksTelemetry(): Flow<StreaksTelemetry>
     fun getDataSource(): Flow<TelemetryDataSource>
+    fun getFilterMode(): Flow<DataSourceFilterMode>
+    fun getSelectedSourcePackage(): Flow<String?>
+    fun getDiscoveredSources(): Flow<List<DiscoveredSource>>
     fun setDataSource(source: TelemetryDataSource)
+    fun setFilterMode(mode: DataSourceFilterMode, targetPackage: String? = null)
     fun updateCalendarAge(newAge: Int)
     suspend fun refreshTelemetry()
 }
@@ -69,7 +75,16 @@ class DefaultTelemetryRepository(
     private val savedSource = sharedPrefs?.getString("data_source", null)
     private val initialSource = if (savedSource == "LIVE") TelemetryDataSource.LIVE else TelemetryDataSource.DEMO
 
+    private val savedFilterMode = sharedPrefs?.getString("filter_mode", DataSourceFilterMode.FITBIT_ONLY.name)
+        ?.let { try { DataSourceFilterMode.valueOf(it) } catch (_: Exception) { DataSourceFilterMode.FITBIT_ONLY } }
+        ?: DataSourceFilterMode.FITBIT_ONLY
+
+    private val savedTargetPackage = sharedPrefs?.getString("target_package", null)
+
     private val dataSourceState = MutableStateFlow(initialSource)
+    private val filterModeState = MutableStateFlow(savedFilterMode)
+    private val selectedSourcePackageState = MutableStateFlow<String?>(savedTargetPackage)
+    private val discoveredSourcesState = MutableStateFlow<List<DiscoveredSource>>(emptyList())
 
     private val savedAge = sharedPrefs?.getInt("calendar_age", 34) ?: 34
 
@@ -90,6 +105,18 @@ class DefaultTelemetryRepository(
     override fun getPulseAgeTelemetry(): Flow<PulseAgeTelemetry> = pulseAgeState.asStateFlow()
     override fun getStreaksTelemetry(): Flow<StreaksTelemetry> = streaksState.asStateFlow()
     override fun getDataSource(): Flow<TelemetryDataSource> = dataSourceState.asStateFlow()
+    override fun getFilterMode(): Flow<DataSourceFilterMode> = filterModeState.asStateFlow()
+    override fun getSelectedSourcePackage(): Flow<String?> = selectedSourcePackageState.asStateFlow()
+    override fun getDiscoveredSources(): Flow<List<DiscoveredSource>> = discoveredSourcesState.asStateFlow()
+
+    override fun setFilterMode(mode: DataSourceFilterMode, targetPackage: String?) {
+        filterModeState.value = mode
+        selectedSourcePackageState.value = targetPackage
+        sharedPrefs?.edit()
+            ?.putString("filter_mode", mode.name)
+            ?.putString("target_package", targetPackage)
+            ?.apply()
+    }
 
     override fun updateCalendarAge(newAge: Int) {
         sharedPrefs?.edit()?.putInt("calendar_age", newAge)?.apply()
@@ -126,17 +153,24 @@ class DefaultTelemetryRepository(
         val zone = ZoneId.systemDefault()
         val timeFmt = DateTimeFormatter.ofPattern("h:mm a", Locale.US)
 
-        // 1. Fetch Live Records from Health Connect
-        val todayStepRecords = manager.readTodayStepsRecords()
+        val currentFilter = filterModeState.value
+        val currentTargetPkg = selectedSourcePackageState.value
+
+        // Discover contributing sources
+        val sources = manager.discoverContributingSources()
+        discoveredSourcesState.value = sources
+
+        // 1. Fetch Live Records from Health Connect with Source Filtering
+        val todayStepRecords = manager.readTodayStepsRecords(currentFilter, currentTargetPkg)
         val liveSteps = todayStepRecords.sumOf { it.count }.toInt()
-        val last30DaysSteps = manager.readStepsForLastDays(30)
-        val rhrHistory = manager.readRestingHeartRateHistory(14)
+        val last30DaysSteps = manager.readStepsForLastDays(30, currentFilter, currentTargetPkg)
+        val rhrHistory = manager.readRestingHeartRateHistory(14, currentFilter, currentTargetPkg)
         val liveRhr = rhrHistory.lastOrNull()
-        val hrvHistory = manager.readHrvHistory(14)
+        val hrvHistory = manager.readHrvHistory(14, currentFilter, currentTargetPkg)
         val liveHrv = hrvHistory.lastOrNull()
-        val liveActiveKcal = manager.readTodayActiveCalories().toInt()
-        val liveFloors = manager.readTodayFloors().toInt()
-        val liveSleep = manager.readLastSleepSession()
+        val liveActiveKcal = manager.readTodayActiveCalories(currentFilter, currentTargetPkg).toInt()
+        val liveFloors = manager.readTodayFloors(currentFilter, currentTargetPkg).toInt()
+        val liveSleep = manager.readLastSleepSession(currentFilter, currentTargetPkg)
 
         // 2. Build Live Hourly Steps Histogram & Elevation
         val hourlyBuckets = IntArray(24)
@@ -352,9 +386,15 @@ class DefaultTelemetryRepository(
             )
         }
 
+        val sourceFilterLabel = when (currentFilter) {
+            DataSourceFilterMode.FITBIT_ONLY -> "Fitbit Wearable"
+            DataSourceFilterMode.CUSTOM -> "Custom Source"
+            DataSourceFilterMode.ALL -> "Merged Sources"
+        }
+
         val coachingText = when {
             liveSteps == 0 && liveSleep == null && liveRhr == null ->
-                "Connected to Health Connect. Waiting for today's wearable or fitness app telemetry..."
+                "Connected to Health Connect ($sourceFilterLabel). Waiting for sync..."
             liveRecoveryScore >= 67 ->
                 "Well recovered ($liveRecoveryScore%). Optimal window to push strain to 11–14."
             liveRecoveryScore >= 34 ->

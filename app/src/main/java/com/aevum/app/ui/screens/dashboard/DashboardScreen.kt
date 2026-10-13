@@ -67,6 +67,9 @@ import com.aevum.app.ui.theme.TextWhite
 import com.aevum.app.viewmodels.BiometricViewModel
 import kotlinx.coroutines.launch
 
+import com.aevum.app.data.model.DataSourceFilterMode
+import com.aevum.app.ui.components.DataSourceFilterDialog
+
 @Composable
 fun DashboardScreen(
     onNavigateToScreen: (Screen) -> Unit,
@@ -78,11 +81,15 @@ fun DashboardScreen(
     val recoveryOverview by viewModel.recoveryOverview.collectAsState()
     val streaksTelemetry by viewModel.streaksTelemetry.collectAsState()
     val dataSource by viewModel.dataSource.collectAsState()
+    val filterMode by viewModel.filterMode.collectAsState()
+    val selectedSourcePackage by viewModel.selectedSourcePackage.collectAsState()
+    val discoveredSources by viewModel.discoveredSources.collectAsState()
     val scrollState = rememberScrollState()
     val lifecycleOwner = androidx.compose.ui.platform.LocalLifecycleOwner.current
 
     var showStartupDialog by remember { mutableStateOf(dataSource != TelemetryDataSource.LIVE) }
     var showInfoDialog by remember { mutableStateOf(false) }
+    var showFilterDialog by remember { mutableStateOf(false) }
 
     // Auto-check permissions and refresh live data whenever returning from Health Connect Settings
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
@@ -288,12 +295,43 @@ fun DashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         if (dataSource == TelemetryDataSource.LIVE) {
+                            // Source filter pill (Fitbit Only / All)
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(CyanGlow.copy(alpha = 0.15f))
+                                    .clickable { showFilterDialog = true }
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(3.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Bolt,
+                                        contentDescription = "Source Filter",
+                                        tint = CyanGlow,
+                                        modifier = Modifier.size(11.dp)
+                                    )
+                                    Text(
+                                        text = when (filterMode) {
+                                            DataSourceFilterMode.FITBIT_ONLY -> "Fitbit"
+                                            DataSourceFilterMode.ALL -> "All"
+                                            DataSourceFilterMode.CUSTOM -> "Custom"
+                                        },
+                                        color = CyanGlow,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
                             Box(
                                 modifier = Modifier
                                     .clip(RoundedCornerShape(8.dp))
                                     .background(CardBackgroundGlass)
                                     .clickable { viewModel.setDataSource(TelemetryDataSource.DEMO) }
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                                    .padding(horizontal = 7.dp, vertical = 3.dp)
                             ) {
                                 Text(
                                     text = "Demo",
@@ -314,7 +352,7 @@ fun DashboardScreen(
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
                             Text(
-                                text = if (dataSource == TelemetryDataSource.LIVE) "Live Sync" else "Connect",
+                                text = if (dataSource == TelemetryDataSource.LIVE) "Sync" else "Connect",
                                 color = if (dataSource == TelemetryDataSource.LIVE) EmeraldGlow else CyanGlow,
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold
@@ -483,6 +521,22 @@ fun DashboardScreen(
                     )
                 ),
                 onDismiss = { showInfoDialog = false }
+            )
+        }
+        // Telemetry Data Source Filter Dialog (Fitbit Only vs All Sources)
+        if (showFilterDialog) {
+            DataSourceFilterDialog(
+                currentFilterMode = filterMode,
+                selectedPackage = selectedSourcePackage,
+                discoveredSources = discoveredSources,
+                onSelectFilterMode = { mode, pkg ->
+                    viewModel.setFilterMode(mode, pkg)
+                    showFilterDialog = false
+                },
+                onOpenHealthConnectSettings = {
+                    openHealthConnectSettings(context)
+                },
+                onDismiss = { showFilterDialog = false }
             )
         }
     }
