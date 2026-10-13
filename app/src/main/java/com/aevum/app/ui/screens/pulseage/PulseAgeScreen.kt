@@ -211,12 +211,16 @@ fun PulseAgeScreen(
             )
         }
 
-        // Configure Calendar Age Dialog
+        // Configure Calendar Age & Date of Birth Dialog
         if (showConfigureAgeDialog) {
             ConfigureAgeDialog(
                 initialAge = pulseAgeTelemetry.calendarAge,
+                initialBirthDateIso = pulseAgeTelemetry.birthDateIso,
                 onSaveAge = { newAge ->
                     viewModel.updateCalendarAge(newAge)
+                },
+                onSaveBirthDate = { year, month, day ->
+                    viewModel.updateBirthDate(year, month, day)
                 },
                 onDismiss = { showConfigureAgeDialog = false }
             )

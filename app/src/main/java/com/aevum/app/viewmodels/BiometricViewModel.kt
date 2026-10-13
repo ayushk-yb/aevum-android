@@ -151,6 +151,13 @@ class BiometricViewModel(
         }
     }
 
+    fun updateBirthDate(year: Int, month: Int, dayOfMonth: Int) {
+        telemetryRepository.updateBirthDate(year, month, dayOfMonth)
+        if (dataSource.value == TelemetryDataSource.LIVE) {
+            refresh()
+        }
+    }
+
     fun onPermissionsResult(granted: Set<String>) {
         if (granted.isNotEmpty()) {
             setDataSource(TelemetryDataSource.LIVE)

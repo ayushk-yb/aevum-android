@@ -46,6 +46,7 @@ interface TelemetryRepository {
     fun setDataSource(source: TelemetryDataSource)
     fun setFilterMode(mode: DataSourceFilterMode, targetPackage: String? = null)
     fun updateCalendarAge(newAge: Int)
+    fun updateBirthDate(year: Int, month: Int, dayOfMonth: Int)
     suspend fun refreshTelemetry()
 }
 
@@ -86,7 +87,22 @@ class DefaultTelemetryRepository(
     private val selectedSourcePackageState = MutableStateFlow<String?>(savedTargetPackage)
     private val discoveredSourcesState = MutableStateFlow<List<DiscoveredSource>>(emptyList())
 
-    private val savedAge = sharedPrefs?.getInt("calendar_age", 34) ?: 34
+    private val savedBirthDateIso = sharedPrefs?.getString("birth_date", null)
+
+    private fun computeCurrentAge(): Int {
+        val iso = sharedPrefs?.getString("birth_date", null)
+        if (!iso.isNullOrBlank()) {
+            try {
+                val bDate = LocalDate.parse(iso)
+                val now = LocalDate.now(ZoneId.systemDefault())
+                val years = java.time.Period.between(bDate, now).years
+                if (years in 1..120) return years
+            } catch (_: Exception) {}
+        }
+        return sharedPrefs?.getInt("calendar_age", 34) ?: 34
+    }
+
+    private val savedAge = computeCurrentAge()
 
     private val recoveryState = MutableStateFlow(MockTelemetryProvider.getRecoveryOverview())
     private val stepsState = MutableStateFlow(MockTelemetryProvider.getStepsTelemetry())
@@ -94,7 +110,11 @@ class DefaultTelemetryRepository(
     private val pulseAgeState = MutableStateFlow(
         MockTelemetryProvider.getPulseAgeTelemetry().let {
             val delta = Math.round((it.pulseAge - savedAge) * 10f) / 10f
-            it.copy(calendarAge = savedAge, deltaYears = delta)
+            it.copy(
+                calendarAge = savedAge,
+                birthDateIso = savedBirthDateIso,
+                deltaYears = delta
+            )
         }
     )
     private val streaksState = MutableStateFlow(MockTelemetryProvider.getStreaksTelemetry())
@@ -119,14 +139,40 @@ class DefaultTelemetryRepository(
     }
 
     override fun updateCalendarAge(newAge: Int) {
-        sharedPrefs?.edit()?.putInt("calendar_age", newAge)?.apply()
+        sharedPrefs?.edit()
+            ?.putInt("calendar_age", newAge)
+            ?.remove("birth_date")
+            ?.apply()
         val current = pulseAgeState.value
         val delta = Math.round((current.pulseAge - newAge) * 10f) / 10f
         pulseAgeState.value = current.copy(
             calendarAge = newAge,
+            birthDateIso = null,
             deltaYears = delta,
             minScaleAge = (newAge - 15).coerceAtLeast(15).toFloat(),
             maxScaleAge = (newAge + 15).toFloat()
+        )
+    }
+
+    override fun updateBirthDate(year: Int, month: Int, dayOfMonth: Int) {
+        val bDate = LocalDate.of(year, month, dayOfMonth)
+        val iso = bDate.toString()
+        val now = LocalDate.now(ZoneId.systemDefault())
+        val calculatedAge = java.time.Period.between(bDate, now).years.coerceIn(10, 115)
+
+        sharedPrefs?.edit()
+            ?.putString("birth_date", iso)
+            ?.putInt("calendar_age", calculatedAge)
+            ?.apply()
+
+        val current = pulseAgeState.value
+        val delta = Math.round((current.pulseAge - calculatedAge) * 10f) / 10f
+        pulseAgeState.value = current.copy(
+            calendarAge = calculatedAge,
+            birthDateIso = iso,
+            deltaYears = delta,
+            minScaleAge = (calculatedAge - 15).coerceAtLeast(15).toFloat(),
+            maxScaleAge = (calculatedAge + 15).toFloat()
         )
     }
 

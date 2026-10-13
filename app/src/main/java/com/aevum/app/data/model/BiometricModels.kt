@@ -98,6 +98,7 @@ data class SleepTelemetry(
 
 data class PulseAgeTelemetry(
     val calendarAge: Int = 34,
+    val birthDateIso: String? = null, // "YYYY-MM-DD"
     val pulseAge: Float = 31.6f,
     val deltaYears: Float = -2.4f,
     val paceOfAging: Float = 0.88f, // < 1.0 is slower aging
